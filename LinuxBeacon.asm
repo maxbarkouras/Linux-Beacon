@@ -17,7 +17,6 @@ section .data
     newline db 0ah
 
     lsCommand db "/bin/ls", 00h
-
     lsArgs dq lsCommand, lsFilePath
 
 section .text
