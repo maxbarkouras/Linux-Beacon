@@ -12,9 +12,8 @@ section .bss
     padding resb 64
 
 section .data
-    ip_address dd 0x3CF7B693
+    ip_address dd 0x0100007F
     port dw 0x115C
-    hel db "hello world", 0ah, 00h
     newline db 0ah
 
     lsCommand db "/bin/ls", 00h
