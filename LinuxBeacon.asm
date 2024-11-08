@@ -17,7 +17,8 @@ section .data
     newline db 0ah
 
     lsCommand db "/bin/ls", 00h
-    lsArgs dq lsCommand, lsFilePath
+    lsArg1 db "-l", 00h
+    lsArgs dq lsCommand, lsArg1, lsFilePath
 
 section .text
 global _start
@@ -87,6 +88,12 @@ child:
     ;check if parent or child, jump to parent accordingly
     cmp rax, 0
     jne parent
+
+    ;change stdout file descriptor to socket descriptor
+    mov rax, 33
+    mov rdi, r15
+    mov rsi, 1
+    syscall
     
     ;call execve with '/bin/ls' argument
     mov rdi, lsCommand
@@ -104,13 +111,6 @@ parent:
     mov rdi, -1
     xor rsi, rsi
     xor rdx, rdx
-    syscall
-
-    ;send original recieved message, here for testing
-    mov rax, 1
-    mov rdi, r15
-    mov rdx, 100
-    mov rsi, readVal
     syscall
 
     ;jump to exit
